@@ -2,11 +2,11 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>洗脳文字避けゲーム - 精密回避 -</title>
+    <title>洗脳文字避けゲーム - 深淵の追跡者 -</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #000; color: #fff; 
                font-family: "Hiragino Kaku Gothic ProN", "Hiragino Kaku Gothic Pro", "メイリオ", sans-serif; }
-        canvas { display: block; cursor: none; }
+        canvas { display: block; cursor: none; } /* カーソルを隠して没入感を出す */
         #ui { position: absolute; top: 10px; left: 10px; font-size: 18px; color: #ff0000; pointer-events: none; z-index: 10; font-weight: bold; }
     </style>
 </head>
@@ -28,12 +28,30 @@ let frameCount = 0;
 
 const kakuGothic = '"Hiragino Kaku Gothic ProN", "Hiragino Kaku Gothic Pro", "メイリオ", sans-serif';
 const centerText = "全てあなたの所為です。";
+// 文字列全体の当たり判定（横幅と高さ）
 const targetBox = { w: 320, h: 45 }; 
 
 const enemyChars = "一心不乱描出妙笛音心地好感瞬間聴神経焼焦戯言避様針傷跡隠病心慰様視神経麻痺虚無思想群喜悲長年時経屍感情求全所為海中彷徨続見一摘光甘全掻集足元及像突然呼吸絶鋼器壊前向風吹漂糸洗脳狂路線変動予想裏切意志持始機械掴放繰返彼今迄演技続消記憶隅駆巡得体知偶像彫心鏤骨末抱刃向裏付言葉紡奮立偶像楽様針向音色奏四面楚歌生壊既枯尽屍優美求全所為海中彷徨続見一摘光甘全掻集足元及像突然呼吸絶鋼器壊前向風吹漂糸洗脳狂路線変動予想裏切意志持始機械掴放繰返彼今迄演技続消形骸化愛他力本願怠惰".split("");
 
 let enemies = [];
 const mouse = { x: canvas.width / 2, y: canvas.height / 2 };
+
+// --- 自機（プレイヤーアイコン）画像の設定 ---
+const playerImg = new Image();
+// GitHub Pagesで公開された画像URLを指定します。
+// （hino-tyoutyo.github.io/sisaku/player.png となると仮定）
+playerImg.src = "https://hino-tyoutyo.github.io/sisaku/player.png";
+
+const playerSettings = {
+    w: 30, // 画像を表示する幅
+    h: 30, // 画像を表示する高さ
+    radius: 12, // 当たり判定の大きさ（少し小さめがちょうどいい）
+    loaded: false
+};
+
+playerImg.onload = () => {
+    playerSettings.loaded = true; // 画像が読み込まれたらフラグを立てる
+}
 
 window.addEventListener('mousemove', (e) => {
     mouse.x = e.clientX;
@@ -56,6 +74,7 @@ class Enemy {
             else { this.x = -60; this.y = Math.random() * canvas.height; }
 
             this.char = enemyChars[Math.floor(Math.random() * enemyChars.length)];
+            // 漢字サイズを微調整 (20~45 -> 24~54)
             this.fontSize = (Math.random() * 30 + 24) + (difficultyLevel * 0.4);
             this.radius = this.fontSize * 0.42;
             this.rotation = Math.random() * Math.PI * 2;
@@ -66,13 +85,14 @@ class Enemy {
             this.vx = Math.cos(angle) * speed;
             this.vy = Math.sin(angle) * speed;
         } else {
-            // ドット：左右から反対側へ平行移動
+            // ドット：左右から平行移動
             const fromLeft = Math.random() > 0.5;
             this.x = fromLeft ? -30 : canvas.width + 30;
             this.y = Math.random() * canvas.height;
+            // ドットのサイズを調整 (4 -> 5)
             this.radius = 5;
             this.vx = fromLeft ? 1.2 : -1.2;
-            this.vy = 0; 
+            this.vy = 0;
         }
     }
 
@@ -139,45 +159,61 @@ function gameLoop() {
             enemies.push(new Enemy(elapsedSec, 'kanji'));
         }
 
-        // ドットの生成：さらに頻度を半分に (24 -> 48)
-        if (frameCount % 48 === 0) {
+        // ドットの生成：頻度を1/2に (12 -> 24)
+        if (frameCount % 24 === 0) {
             enemies.push(new Enemy(elapsedSec, 'dot'));
         }
 
-        // 中心の文字
+        // --- 中心の文字の描画と判定 ---
         ctx.font = `bold 28px ${kakuGothic}`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         
         if (elapsedMS < 1000) {
+            // 最初の1秒間：半透明にし、判定を無効化
             ctx.fillStyle = "rgba(255, 255, 255, 0.2)";
             ctx.fillText(centerText, centerX, centerY);
         } else {
+            // 1秒経過後：不透明にし、判定を有効化
             ctx.fillStyle = "white";
             ctx.fillText(centerText, centerX, centerY);
             
+            // 文字列全体の四角形判定 (mouse.x, y > Boxの範囲)
             if (mouse.x > centerX - targetBox.w/2 && mouse.x < centerX + targetBox.w/2 &&
                 mouse.y > centerY - targetBox.h/2 && mouse.y < centerY + targetBox.h/2) {
                 gameState = 'gameover';
             }
         }
 
-        // 自機
-        ctx.beginPath();
-        ctx.arc(mouse.x, mouse.y, 6, 0, Math.PI * 2);
-        ctx.fillStyle = "#fff";
-        ctx.fill();
-        ctx.strokeStyle = "#ff0000";
-        ctx.stroke();
+        // --- 自機（プレイヤーアイコン）の描画 ---
+        if (playerSettings.loaded) {
+            // 画像が読み込まれていれば描画（マウス位置を中心に）
+            ctx.drawImage(playerImg, mouse.x - playerSettings.w/2, mouse.y - playerSettings.h/2, playerSettings.w, playerSettings.h);
+        } else {
+            // 読み込み中やエラー時は白い点で代用
+            ctx.beginPath();
+            ctx.arc(mouse.x, mouse.y, 6, 0, Math.PI * 2);
+            ctx.fillStyle = "#fff";
+            ctx.fill();
+            ctx.strokeStyle = "#ff0000";
+            ctx.stroke();
+            ctx.closePath();
+        }
 
         for (let i = enemies.length - 1; i >= 0; i--) {
             const e = enemies[i];
             e.update();
             e.draw();
 
+            // 自機との当たり判定（距離）
             const dist = Math.sqrt((e.x - mouse.x)**2 + (e.y - mouse.y)**2);
-            if (dist < e.radius + 5) gameState = 'gameover';
+            
+            // 文字の当たり判定（文字の大きさ＋画像の当たり判定半径）
+            if (dist < e.radius + playerSettings.radius) {
+                gameState = 'gameover';
+            }
 
+            // 画面外削除
             if (e.x < -300 || e.x > canvas.width + 300 || e.y < -300 || e.y > canvas.height + 300) {
                 enemies.splice(i, 1);
             }
@@ -195,7 +231,9 @@ function gameLoop() {
     }
     requestAnimationFrame(gameLoop);
 }
+
 gameLoop();
+
 window.addEventListener('resize', () => {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
